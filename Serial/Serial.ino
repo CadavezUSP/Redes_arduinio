@@ -9,7 +9,7 @@
 int Ascii_to_Bin(int asciiInput, int* res)
 {
   int rem, counter=0; 
-  res = (int*) malloc(1*sizeof(int))
+  res = (int*) malloc(1*sizeof(int));
    
   while (asciiInput > 0)
   {
@@ -39,7 +39,7 @@ void invert_vector(int* v, int sz){
 // Calcula bit de paridade - Par ou impar
 int* bitParidade(char dado, int* siz){
   int *dado_bin, counter=0;
-  sz = Ascii_to_Bin(dado, dado_bin);
+  int sz = Ascii_to_Bin(dado, dado_bin);
   for (int i = sz; i>0;i--){
     if (dado_bin[i] == 1){
       counter++;
@@ -47,14 +47,15 @@ int* bitParidade(char dado, int* siz){
   }
   dado_bin = (int*)realloc(dado_bin, (sz++)*sizeof(int));
   *siz = sz;
-  if (counter %2)
+  if (counter %2){
     dado_bin[sz] = 1;
-    invert_vector(dado_bin, sz)
-    return = dado_bin;
+    invert_vector(dado_bin, sz);
+    return dado_bin;
+  }
   else{
     dado_bin[sz] = 0;
-    invert_vector(dado_bin, sz)
-    return = dado_bin;
+    invert_vector(dado_bin, sz);
+    return dado_bin;
   }
 }
 
@@ -71,30 +72,33 @@ void setup(){
   // Configura porta serial (Serial Monitor - Ctrl + Shift + M)
   Serial.begin(9600);
   // Inicializa TX ou RX
-  pinMode(13, INPUT)
-  pinMode(12, OUTPUT)
+  pinMode(13, INPUT);
+  pinMode(12, OUTPUT);
   
   // Configura timer
-  configuraTemporizador(BAUD_RATE)
+  configuraTemporizador(BAUD_RATE);
   // habilita interrupcoes
   interrupts();
-  int sz = 15;
 
-  char* mesagem = malloc(sz*sizeof(char);
-  mensagem = "Redes eh legal";
 }
 
 // O loop() eh executado continuamente (como um while(true))
 void loop ( ) {
-//  if (sz <0) interrupt()
-  digitalWrite(12, HIGH)
-  int resp = digitalRead(13)
-  while(resp == LOW){
-    digitalWrite(12, HIGH)
-    resp = digitalRead(13)
+  int sz = 15;
+  char* mensagem = (char*) malloc(sz*sizeof(char));
+  for (int i=0; i<sz;i++){
+    mensagem[i] = ('a'+i);
   }
+//  if (sz <0) interrupt()
+  digitalWrite(12, HIGH);
+  int resp = digitalRead(13);
+  while(resp == LOW){
+    digitalWrite(12, HIGH);
+    resp = digitalRead(13);
+  }
+
   int bin_size=0;
-  char msg_bin = bitParidade(mensagem[sz], &bin_size)
+  int* msg_bin = bitParidade(mensagem[sz], &bin_size);
   for (int i = 0;i<bin_size;i++){
     if (msg_bin[i] == 1){
       digitalWrite(12, HIGH);
@@ -103,5 +107,5 @@ void loop ( ) {
       digitalWrite(12,LOW);
     }
   }
-  remove_char(mensagem, &sz)
+  remove_char(mensagem, &sz);
 }
