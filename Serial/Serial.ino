@@ -1,11 +1,13 @@
 
 #define PINO_RX 13
-#define PINO_TX 12
+#define PINO_CTS 12
+#define PINO_RTS 11
 #define BAUD_RATE 1
 #define HALF_BAUD 1000/(2*BAUD_RATE)
 
 #include "Temporizador.h"
-
+ byte dataB;
+ byte Bit_counter=10;
 //int Ascii_to_Bin(int asciiInput, int* res)
 //{
 //  int rem, counter=0; 
@@ -80,7 +82,13 @@ byte bitParidade(byte dado){
 // Rotina de interrupcao do timer1
 // O que fazer toda vez que 1s passou?
 ISR(TIMER1_COMPA_vect){
-  //>>>> Codigo Aqui <<<<
+  Serial.println("Entrei na ISR");
+//  char dado = Serial.read();
+//  if (dado <= '\n')
+//    Bit_counter = -2;
+//  else{
+//    dataB = dado;
+//  }
 }
 
 // Executada uma vez quando o Arduino reseta
@@ -90,45 +98,80 @@ void setup(){
   // Configura porta serial (Serial Monitor - Ctrl + Shift + M)
   Serial.begin(9600);
   // Inicializa TX ou RX
-  pinMode(13, INPUT);
-  pinMode(12, OUTPUT);
-  
-  
+  pinMode(PINO_RX, OUTPUT);
+  pinMode(PINO_CTS, INPUT);
+  pinMode(PINO_RTS, OUTPUT);
+  Serial.println("Digite a msg");
   // Configura timer
   configuraTemporizador(BAUD_RATE);
   // habilita interrupcoes
   interrupts();
-
 }
 
 // O loop() eh executado continuamente (como um while(true))
 void loop ( ) {
   //Three way handshake
-//  if (sz <0) interrupt()
-//  digitalWrite(12, HIGH);
-//  int resp = digitalRead(13);
+ if (Bit_counter == 10){
+//  digitalWrite(PINO_RTS, HIGH);
+//  int resp = digitalRead(PINO_CTS);
 //  while(resp == LOW){
-//    digitalWrite(12, HIGH);
-//    resp = digitalRead(13);
+//    digitalWrite(PINO_RTS, HIGH);
+//    resp = digitalRead(PINO_CTS);
 //  }
   while(!Serial.available());
   char dado = Serial.read();
-  byte dataB = (byte) dado;
-  byte bitP = bitParidade(dataB);
-  bitWrite(dataB, 8, bitP);
+  dataB = dado;
+  Bit_counter = 7;
+  iniciaTemporizador();
+  }
 
-  //Transmissão do byte bit a bit
-  for (byte i=8;i<=0;i++){
-    byte sign = bitRead(dataB,i);
-    if (sign == 1){
-      digitalWrite(13, HIGH);
+  if (Bit_counter == 7){
+    Serial.println(dataB, BIN);
+//    Serial.println(dataB, BIN);
+    byte bitP = bitParidade(dataB);
+    if (bitP == 1){
+     Serial.print("1");
+     digitalWrite(PINO_RX, HIGH);
     }
     else{
-      digitalWrite(13,LOW);
-    } 
+     Serial.print("0");
+     digitalWrite(PINO_RX,LOW);
+    }
   }
+  if (Bit_counter >0){
+  //deve ser um loop
+    byte sign = bitRead(dataB, Bit_counter);
+    if (sign == 1){
+      Serial.print("1");
+      digitalWrite(PINO_RX, HIGH);
+    }
+    else{
+      Serial.print("0");
+      digitalWrite(PINO_RX,LOW);
+    }
+    Bit_counter--;
+  }
+  else if (Bit_counter == 0){
+      Bit_counter =7;
+      Serial.println();
+      paraTemporizador();
+      char dado = Serial.read();
+      Serial.println(dado, DEC);
+      if (dado <= '\n'){
+        Bit_counter = 10;
+      }
+      else{
+        dataB = dado;
+      }
+    }
+  else{
+    digitalWrite(PINO_RTS, LOW);
+    return;
+   }
+    
+
+  //Transmissão do byte bit a bit
   //Fim da transmissão
-  digitalWrite(13,LOW)
   // int bin_size=0;
   // int* msg_bin = bitParidade(mensagem[sz], &bin_size);
   // for (int i = 0;i<bin_size;i++){
