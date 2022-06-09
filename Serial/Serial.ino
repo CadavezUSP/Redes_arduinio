@@ -1,68 +1,87 @@
 
 #define PINO_RX 13
-#define PINO_TX 12
+#define PINO_CTS 12
+#define PINO_RTS 11
 #define BAUD_RATE 1
 #define HALF_BAUD 1000/(2*BAUD_RATE)
 
 #include "Temporizador.h"
+ byte dataB; // dado em bytes/binario
+ byte Bit_counter; //ponteiro de bits
+ size_t dataSize; // tamanho do dado
+ int code =0; // identificador de estados:
+ // 0 - tentando three way handshake
+ // 1 - primeiro bit enviado e primeira ativação do temporizador
+ // 2 - interrupção do temporizador e verificação de continuidade
+ // 3 - fim da transmissão
+ // 4 - transmitindo
 
-int Ascii_to_Bin(int asciiInput, int* res)
+// acha o tamanho do bit
+byte findHighestBit(char x)
 {
-  int rem, counter=0; 
-  res = (int*) malloc(1*sizeof(int));
-   
-  while (asciiInput > 0)
+  for (int bit = 15; bit >= 0; bit--)
   {
-    rem = asciiInput % 2;
-    res[counter] = rem;
-    asciiInput = asciiInput / 2;
-    res = (int*) realloc(res, (counter++)*sizeof(int));
-  }
-  return counter;
-}
-
-void remove_char(char* msg, int* sz){
-  for (int i =0;i<(*sz)-1;i++){
-    msg[i] = msg[i+1];
-  }
-  *sz--;
-}
-
-void invert_vector(int* v, int sz){
-  for (int i =0; i<sz/2;i++, sz--){
-    int aux = v[i];
-    v[i] = v[sz];
-    v[sz] = aux;
-  }
-}
-
-// Calcula bit de paridade - Par ou impar
-int* bitParidade(char dado, int* siz){
-  int *dado_bin, counter=0;
-  int sz = Ascii_to_Bin(dado, dado_bin);
-  for (int i = sz; i>0;i--){
-    if (dado_bin[i] == 1){
-      counter++;
+    if (bitRead(x, bit))
+    {
+      return bit + 1;
     }
   }
-  dado_bin = (int*)realloc(dado_bin, (sz++)*sizeof(int));
-  *siz = sz;
-  if (counter %2){
-    dado_bin[sz] = 1;
-    invert_vector(dado_bin, sz);
-    return dado_bin;
+  return 0;
+}
+
+// calcula o bit de paridade para par
+byte bitParidade(byte dado){
+  int counter = 0;
+  byte compare = 1;
+  byte bitP;
+  for (byte i=0; i<8; i++){
+    byte aux = bitRead(dado, i);
+    if (aux == compare){
+      counter ++;
+    }
+  }
+  if (counter %2 ==0){
+    bitP = 0;
   }
   else{
-    dado_bin[sz] = 0;
-    invert_vector(dado_bin, sz);
-    return dado_bin;
+    bitP = 1;
   }
+  return bitP;
 }
 
 // Rotina de interrupcao do timer1
-// O que fazer toda vez que 1s passou?
+// Anda bit a bit do dado binario enviando e imprimindo no Serial 
 ISR(TIMER1_COMPA_vect){
-  //>>>> Codigo Aqui <<<<
+  //envia o bit de paridade
+  if (Bit_counter == dataSize){
+    byte bitP = bitParidade(dataB);
+    if (bitP == 1){
+     Serial.print("1");
+     digitalWrite(PINO_RX, HIGH);
+    }
+    else{
+     Serial.print("0");
+     digitalWrite(PINO_RX,LOW);
+    }
+  }
+  // envia os demais bits
+  else if (Bit_counter >= 0){
+    byte sign = bitRead(dataB, Bit_counter);
+    if (sign == 1){
+      Serial.print("1");
+      digitalWrite(PINO_RX, HIGH);
+    }
+    else{
+      Serial.print("0");
+      digitalWrite(PINO_RX,LOW);
+    }
+  }
+  //anda com o ponteiro para os bits
+  Bit_counter--;
+  // como é byte 0 -1 = 255, pois da a volta
+  if (Bit_counter == 255){
+    code = 2;
+  }
 }
 
 // Executada uma vez quando o Arduino reseta
@@ -72,40 +91,72 @@ void setup(){
   // Configura porta serial (Serial Monitor - Ctrl + Shift + M)
   Serial.begin(9600);
   // Inicializa TX ou RX
-  pinMode(13, INPUT);
-  pinMode(12, OUTPUT);
-  
+  pinMode(PINO_RX, OUTPUT);
+  pinMode(PINO_CTS, INPUT);
+  pinMode(PINO_RTS, OUTPUT);
   // Configura timer
   configuraTemporizador(BAUD_RATE);
   // habilita interrupcoes
   interrupts();
-
 }
 
 // O loop() eh executado continuamente (como um while(true))
 void loop ( ) {
-  int sz = 15;
-  char* mensagem = (char*) malloc(sz*sizeof(char));
-  for (int i=0; i<sz;i++){
-    mensagem[i] = ('a'+i);
-  }
-//  if (sz <0) interrupt()
-  digitalWrite(12, HIGH);
-  int resp = digitalRead(13);
-  while(resp == LOW){
-    digitalWrite(12, HIGH);
-    resp = digitalRead(13);
+  //Three way handshake
+  if (code == 0){
+//  digitalWrite(PINO_RTS, HIGH);
+//  int resp = digitalRead(PINO_CTS);
+    //fica preso aqui até receber o sinal que pode enviar dados
+//  while(resp == LOW){
+//    digitalWrite(PINO_RTS, HIGH);
+//    resp = digitalRead(PINO_CTS);
+//  }
+  code = 1;
   }
 
-  int bin_size=0;
-  int* msg_bin = bitParidade(mensagem[sz], &bin_size);
-  for (int i = 0;i<bin_size;i++){
-    if (msg_bin[i] == 1){
-      digitalWrite(12, HIGH);
+  // inicia o temporizador pela primeira vez
+ if (code == 1){
+
+    if (!Serial.available()){
+      Serial.println("Digite uma Mensagem");
     }
-    else{
-      digitalWrite(12,LOW);
+    while(!Serial.available());
+    char dado = Serial.read();
+    dataB = dado;
+    dataSize = findHighestBit(dado);
+    Bit_counter = dataSize;
+//    Serial.println(Bit_counter);
+    Serial.print(dado);
+    Serial.print(" - ");
+    iniciaTemporizador();
+    code = 4;
+   }
+
+// para o temporizador e verifica se deve continuar enviando ou parar
+  else if (code == 2){
+      Serial.println();
+      paraTemporizador();
+      while(!Serial.available());
+      char dado = Serial.read();
+      if (dado == '\n'){
+        code = 3;
+      }
+      else{
+        Serial.print(dado);
+        Serial.print(" - ");
+        dataSize = findHighestBit(dado);
+        Bit_counter = dataSize;
+        dataB = dado;
+        code = 4;
+        iniciaTemporizador();
+      }
     }
-  }
-  remove_char(mensagem, &sz);
+   // para o envio
+  if (code == 3){
+    digitalWrite(PINO_RTS, LOW);
+//    return;
+    code = 0;
+    Serial.println("mensagem enviada!");
+   }
+    
 }
